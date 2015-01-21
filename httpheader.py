@@ -98,7 +98,9 @@ SEPARATORS = '()<>@,;:\\"/[]?={} \t'
 LWS = ' \t\n\r'  # linear white space
 CRLF = '\r\n'
 DIGIT = '0123456789'
+ALPHA = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 HEX = '0123456789ABCDEFabcdef'
+TCHAR = "!#$%&'*+-.^_`|~" + ALPHA + HEX
 
 # Try to get a set/frozenset implementation if possible
 try:
@@ -117,7 +119,10 @@ try:
     LWS = frozenset([c for c in LWS])
     CRLF = frozenset([c for c in CRLF])
     DIGIT = frozenset([c for c in DIGIT])
+    ALPHA = frozenset([c for c in ALPHA])
     HEX = frozenset([c for c in HEX])
+    TCHAR = frozenset([c for c in TCHAR])
+
     del c
 except NameError:
     # Python 2.3 or earlier, leave as simple strings
@@ -249,6 +254,18 @@ class ParseError(ValueError):
         else:
             return '%s\n\tOccured near %s' % (self.args[0], repr(self.input_string[self.at_position:self.at_position+16]))
 
+class EncodingError(ValueError):
+    """Exception class representing an error when constructing a string."""
+    def __init__(self, args, input_string, at_position):
+        ValueError.__init__(self, args)
+        self.input_string = input_string
+        self.at_position = at_position
+    def __str__(self):
+        if self.at_position >= len(self.input_string):
+            return '%s\n\tOccured at end of string' % self.args[0]
+        else:
+            return '%s\n\tOccured near %s' % (self.args[0], repr(self.input_string[self.at_position:self.at_position+16]))
+
 
 def is_token(s):
     """Determines if the string is a valid token."""
@@ -322,21 +339,51 @@ def parse_token(s, start=0):
     return parse_token_or_quoted_string(s, start, allow_quoted=False, allow_token=True)
 
 
-def quote_string(s, always_quote=True):
+def quote_string(s, always_quote=True, strict='error'):
     """Produces a quoted string according to HTTP 1.1 rules.
 
     If always_quote is False and if the string is also a valid token,
     then this function may return a string without quotes.
 
+    If strict is 'error' then nulls and control characters other than
+    whitespace and horizontal tab is not allowed anywhere in the string and
+    will raise ValueError. If strict is 'escape', they will be backspace
+    escaped. If strict is 'remove', they will be removed from the string.
+    Otherwise, if strict is 'passtru' they will remain as-is in the
+    quoted string.
+
+    Syntax of quoted-string:
+
+       quoted-string  = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+       qdtext         = OWS / %x21 / %x23-5B / %x5D-7E / obs-text
+       obs-text       = %x80-FF
     """
     need_quotes = False
     q = ''
-    for c in s:
-        if ord(c) < 32 or ord(c) > 127 or c in SEPARATORS:
+    for pos, c in enumerate(s):
+        if c in TCHAR:
+            # tchar (token characters) never need special handling
+            q += c
+        elif c == '\t' or c == ' ' or ord(c) == 0x21 or 0x23 <= ord(c) <= 0x5B or 0x5D <= ord(c) <= 0x7E:
+            # these are characters that are not in tchar but is permissible 
+            # unescaped as qdchar
+            q += c
+            need_quotes = True
+        elif c == '\\' or c == '"':
+            # backslash and double quote are only valid in quoted-string
+            # but they are always escaped
             q += '\\' + c
             need_quotes = True
+        elif strict == 'error':
+            raise EncodingError("Invalid character in quoted-string", s, pos)
+        elif strict == 'escape':
+            q += '\\' + c
+            need_quotes = True
+        elif strict == 'remove':
+            pass
         else:
             q += c
+            need_quotes = True
     if need_quotes or always_quote:
         return '"' + q + '"'
     else:
