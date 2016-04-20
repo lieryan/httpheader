@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
+from __future__ import print_function
 """ Utility functions to work with HTTP headers.
 
  This module provides some utility functions useful for parsing
@@ -543,10 +544,9 @@ def _test_comments():
     def _testrm( a, b, collapse ):
         b2 = remove_comments( a, collapse )
         if b != b2:
-            print 'Comment test failed:'
-            print '   remove_comments( %s, collapse_spaces=%s ) -> %s' \
-                  % (repr(a), repr(collapse), repr(b2))
-            print '   expected %s' % repr(b)
+            print('Comment test failed:')
+            print('   remove_comments( {0}, collapse_spaces={1} ) -> {2}'.format(repr(a), repr(collapse), repr(b2)))
+            print('   expected {0}'.format(repr(b)))
             return 1
         return 0
     failures = 0

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from distutils.core import setup
 name = "httpheader"
-version = "1.1"
+version = "1.2"
 setup( name=name,
        version=version,
        py_modules=[name],
